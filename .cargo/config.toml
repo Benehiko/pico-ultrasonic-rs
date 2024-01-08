@@ -1,0 +1,8 @@
+[target.thumbv6m-none-eabi]
+runner = "elf2uf2-rs -d -s"
+
+[build]
+target = "thumbv6m-none-eabi"
+
+[env]
+DEFMT_LOG = "trace"
