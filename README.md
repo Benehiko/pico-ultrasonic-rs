@@ -35,6 +35,29 @@ cargo run --release --bin pico-ultrasonic-rs
 ```
 
 ---
+Diagnosing your Pico in the wild.
+
+When deploying your Pico into the wild, you might not have the relevant equipment to diagnose your Pico,
+such as your laptop.
+
+The software uses the Pico's LEDs to show some level of progress.
+
+On boot the pico will immediately attempt to initialize the wifi drivers to access the on-board LEDs.
+
+The pico will then signal two 1 second blinks to show that it has come alive.
+
+Next it will signal 5 x 1 second blinks to show that it will connect to the Wireless AP.
+
+Next it will be silent for 2 seconds, after which it will attempt the wireless connection.
+
+On each connection attempt it will blink once.
+
+After aquiring a DHCP ip address it will have a static LED.
+
+Where there is no LED, it means the device has somehow restarted or in a frozen state.
+
+After successfully connecting, it will
+---
 Technical Background links
 
 https://www.handsontec.com/dataspecs/HC-SR04-Ultrasonic.pdf
