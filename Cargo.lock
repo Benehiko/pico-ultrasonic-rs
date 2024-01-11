@@ -245,7 +245,6 @@ name = "cyw43-pio"
 version = "0.1.0"
 dependencies = [
  "cyw43",
- "defmt",
  "embassy-rp",
  "fixed",
  "pio",
@@ -1440,6 +1439,7 @@ dependencies = [
  "panic-reset",
  "panic-semihosting",
  "portable-atomic",
+ "rust-mqtt",
  "ryu",
  "smart-leds",
  "st7789",
@@ -1464,6 +1464,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c92f344f63f950ee36cf4080050e4dce850839b9175da38f9d2ffb69b4dbb21"
 dependencies = [
  "crc-any",
+]
+
+[[package]]
+name = "rust-mqtt"
+version = "0.2.0"
+dependencies = [
+ "defmt",
+ "embedded-io",
+ "embedded-io-async",
+ "heapless 0.8.0",
+ "rand_core",
 ]
 
 [[package]]

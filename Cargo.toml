@@ -1,49 +1,92 @@
 [package]
 name = "rp-intrusion-rust"
-version = "0.1.0"
 edition = "2021"
+version = "0.1.0"
+resolver = "2"
 
 [dependencies]
-embassy-executor = { version = "0.4.0", features = ["task-arena-size-32768", "arch-cortex-m", "executor-thread", "executor-interrupt", "defmt", "integrated-timers"], path = "../embassy/embassy-executor/" }
-embassy-time = { version = "0.2.0",  features = ["defmt", "defmt-timestamp-uptime"], path = "../embassy/embassy-time/"  }
-embassy-rp = { version = "0.1.0",  features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl"], path = "../embassy/embassy-rp/" }
-embassy-futures = { version = "0.1.0"  }
-embassy-usb-logger = { version = "0.1.0", path = "../embassy/embassy-usb-logger/" }
-embassy-net = { version = "0.3", path = "../embassy/embassy-net", features = ["defmt", "tcp", "udp", "dhcpv4", "medium-ethernet"] }
-
+cortex-m-rt = "0.7.0"
 defmt = "0.3"
 defmt-rtt = "0.4"
-fixed = "1.23.1"
-fixed-macro = "1.2"
-
-cortex-m = { version = "0.7.6", features = ["inline-asm"] }
-# cortex-m = { version = "0.7.6", features = ["critical-section-single-core"] }
-cortex-m-rt = "0.7.0"
-
+display-interface = "0.4.1"
 display-interface-spi = "0.4.1"
 embedded-graphics = "0.7.1"
-st7789 = "0.6.1"
-display-interface = "0.4.1"
-byte-slice-cast = { version = "1.2.0", default-features = false }
+fixed = "1.23.1"
+fixed-macro = "1.2"
+log = "0.4"
+panic-probe = "0.3.1"
+panic-reset = "0.1.1"
+panic-semihosting = "0.6.0"
+ryu = "1.0"
 smart-leds = "0.3.0"
+st7789 = "0.6.1"
+static_cell = "2"
 usbd-hid = "0.6.1"
 
-cyw43 = { path = "../embassy/cyw43/", features = ["defmt", "firmware-logs"] }
-cyw43-pio = { path = "../embassy/cyw43-pio/", features = ["defmt", "overclock"] }
+[dependencies.byte-slice-cast]
+version = "1.2.0"
+features = []
+default-features = false
 
-static_cell = "2"
-portable-atomic = { version = "1.5", features = ["critical-section"] }
+[dependencies.cortex-m]
+version = "0.7.6"
+features = ["inline-asm"]
 
-log = "0.4"
-ryu = "1.0"
-panic-reset = "0.1.1"
-panic-probe = "0.3.1"
-panic-semihosting = "0.6.0"
+[dependencies.cyw43]
+path = "../embassy/cyw43/"
+features = ["defmt"]
+default-features = false
 
+[dependencies.cyw43-pio]
+path = "../embassy/cyw43-pio/"
+features = ["overclock"]
+default-features = false
 
-[profile.dev]
-debug = 1 # default is `true`; not needed if not already overridden
+[dependencies.embassy-executor]
+version = "0.4.0"
+path = "../embassy/embassy-executor/"
+features = ["task-arena-size-32768", "arch-cortex-m", "executor-thread", "executor-interrupt", "defmt", "integrated-timers"]
+
+[dependencies.embassy-futures]
+version = "0.1.0"
+features = []
+
+[dependencies.embassy-net]
+version = "0.3"
+path = "../embassy/embassy-net"
+features = ["defmt", "tcp", "udp", "dhcpv4", "medium-ethernet"]
+
+[dependencies.embassy-rp]
+version = "0.1.0"
+path = "../embassy/embassy-rp/"
+features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl"]
+
+[dependencies.embassy-time]
+version = "0.2.0"
+path = "../embassy/embassy-time/"
+features = ["defmt", "defmt-timestamp-uptime"]
+
+[dependencies.embassy-usb-logger]
+version = "0.1.0"
+path = "../embassy/embassy-usb-logger/"
+features = []
+
+[dependencies.portable-atomic]
+version = "1.5"
+features = ["critical-section"]
+
+[dependencies.rust-mqtt]
+version = "0.2.0"
+path = "../rust-mqtt"
+default-features = false
+features = ["no_std"]
 
 [profile.release]
-debug = 0 # default is `false`; using `true` is also OK as symbols reside on the host, not the target
+debug = false
 
+[profile.release.package]
+
+[profile.dev]
+debug = 1
+
+[profile.dev.package]
