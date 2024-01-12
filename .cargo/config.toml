@@ -4,7 +4,8 @@ runner = "elf2uf2-rs -d -s"
 [unstable]
 build-std = [
     "core",
-    "compiler_builtins"
+    "compiler_builtins",
+    "alloc"
 ]
 build-std-features = ["compiler-builtins-mem"]
 

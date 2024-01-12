@@ -2,8 +2,9 @@
 #![no_main]
 
 pub mod hc_sr04;
+pub mod hex;
 
-use core::str::{self, from_utf8, FromStr};
+use core::str::FromStr;
 use core::{env, option_env};
 use cyw43_pio::PioSpi;
 use defmt::unwrap;
@@ -16,10 +17,12 @@ use embassy_rp::bind_interrupts;
 use embassy_rp::gpio::{Level, Output};
 use embassy_rp::peripherals::{DMA_CH0, PIN_23, PIN_25, PIO0, USB};
 use embassy_rp::pio::{InterruptHandler, Pio};
-use embassy_rp::usb::{Driver, InterruptHandler as USBInterruptHandler};
+use embassy_rp::usb::{Driver as USBDriver, InterruptHandler as USBInterruptHandler};
 use embassy_rp::watchdog::Watchdog;
-use embassy_time::{Duration, Instant, Timer};
+use embassy_time::{Duration, Timer};
 use hc_sr04::HCSR04;
+use heapless::String;
+use hex::mac_addr_to_str;
 use rust_mqtt::client::client::MqttClient;
 use rust_mqtt::client::client_config::ClientConfig;
 use rust_mqtt::utils::rng_generator::CountingRng;
@@ -54,9 +57,19 @@ const MQTT_PASSWORD: &'static str = match option_env!("RP_MQTT_PASSWORD") {
     _ => "",
 };
 
+// #[cfg(feature = "usb-logger")]
+// async fn logger(driver: USBDriver<'static, USB>) {
+//     embassy_usb_logger::run!(1024, log::LevelFilter::Debug, driver);
+// }
+
+#[cfg(not(feature = "usb-logger"))]
+async fn logger(_driver: USBDriver<'static, USB>) {
+    //noop
+}
+
 #[embassy_executor::task]
-async fn logger_task(driver: Driver<'static, USB>) {
-    embassy_usb_logger::run!(1024, log::LevelFilter::Debug, driver);
+async fn logger_task(driver: USBDriver<'static, USB>) {
+    logger(driver).await;
 }
 
 #[embassy_executor::task]
@@ -109,10 +122,10 @@ async fn main(spawner: Spawner) {
 
     // Setup logging.
     let usb = p.USB;
-    let driver = Driver::new(usb, Irqs);
+    let driver = USBDriver::new(usb, Irqs);
     spawner.spawn(logger_task(driver)).unwrap();
 
-    log::info!("Pico starting up!");
+    log::debug!("Pico starting up!");
 
     // Setup wifi
     let pwr = Output::new(p.PIN_23, Level::High);
@@ -132,53 +145,31 @@ async fn main(spawner: Spawner) {
     let state = STATE.init(cyw43::State::new());
     let (net_device, mut control, runner) = cyw43::new(state, pwr, spi, fw).await;
 
-    let mac_addr: &str = match net_device.hardware_address() {
-        embassy_net::driver::HardwareAddress::Ethernet(addr) => from_utf8(addr.into()),
-        embassy_net::driver::HardwareAddress::Ieee802154(addr) => addr,
-        _ => panic!("Failed to get mac address"),
-    };
-
-    log::info!("MAC address: {:x}", mac_addr);
-
-    log::info!("Starting wifi task");
+    log::debug!("Starting wifi task");
     unwrap!(spawner.spawn(wifi_task(runner)));
 
     control.init(clm).await;
 
     // get the device up and running as fast as possible
-    log::info!("setting power management mode: performance");
+    log::debug!("setting power management mode: performance");
     control
         .set_power_management(cyw43::PowerManagementMode::Performance)
         .await;
 
-    {
-        log::info!("Scanning for AP: {}", WIFI_NETWORK);
-        let mut scanner = control.scan().await;
-        while let Some(bss) = scanner.next().await {
-            if let Ok(ssid_str) = str::from_utf8(&bss.ssid) {
-                log::info!(
-                    "AP: {}, capability: {}, beacon_period: {}",
-                    ssid_str,
-                    bss.capability,
-                    bss.beacon_period
-                );
-                if ssid_str.eq(WIFI_NETWORK) {
-                    log::info!(
-                        "Found AP: {}, capability: {}, beacon_period: {}",
-                        ssid_str,
-                        bss.capability,
-                        bss.beacon_period
-                    );
-                    break;
-                }
-            }
+    let mac_addr: String<18> = match net_device.hardware_address() {
+        embassy_net::driver::HardwareAddress::Ethernet(addr) => mac_addr_to_str(addr),
+        _ => {
+            log::error!("failed to get mac address");
+            panic!("failed to get mac address");
         }
-    }
+    };
 
-    log::info!("starting watchdog");
+    log::debug!("mac address: {}", mac_addr);
+
+    log::debug!("starting watchdog");
     // watchdog.start(Duration::from_secs(8));
 
-    log::info!("blink 2x long blinks");
+    log::debug!("blink 2x long blinks");
     blink_led(
         &mut control,
         &mut watchdog,
@@ -192,8 +183,9 @@ async fn main(spawner: Spawner) {
 
     let seed = 0x0123_4567_89ab_cdef; // chosen by fair dice roll. guarenteed to be random.
 
-    static STACK: StaticCell<Stack<cyw43::NetDriver>> = StaticCell::new();
     static RESOURCES: StaticCell<StackResources<2>> = StaticCell::new();
+
+    static STACK: StaticCell<Stack<cyw43::NetDriver>> = StaticCell::new();
     let stack = &*STACK.init(Stack::new(
         net_device,
         dhcp_config,
@@ -201,11 +193,11 @@ async fn main(spawner: Spawner) {
         seed,
     ));
 
-    log::info!("starting net task");
+    log::debug!("starting net task");
     watchdog.feed();
     unwrap!(spawner.spawn(net_task(&stack)));
 
-    log::info!("blink 5x short blinks");
+    log::debug!("blink 5x short blinks");
     blink_led(
         &mut control,
         &mut watchdog,
@@ -215,7 +207,7 @@ async fn main(spawner: Spawner) {
     )
     .await;
 
-    log::info!("waiting 2 seconds...");
+    log::debug!("waiting 2 seconds...");
     Timer::after_secs(2).await;
 
     // infinite try to connect to wifi
@@ -234,7 +226,7 @@ async fn main(spawner: Spawner) {
 
         match control.join_wpa2(WIFI_NETWORK, WIFI_PASSWORD).await {
             Ok(_) => {
-                log::info!("connected!");
+                log::debug!("connected!");
                 break;
             }
             Err(e) => {
@@ -250,23 +242,23 @@ async fn main(spawner: Spawner) {
 
     watchdog.feed();
 
-    log::info!("Wifi connected!");
-    log::info!("Waiting 2 seconds...");
+    log::debug!("Wifi connected!");
+    log::debug!("Waiting 2 seconds...");
     Timer::after_secs(2).await;
 
     control.gpio_set(0, false).await;
     // wait forever to get ip address
     // Wait for DHCP, not necessary when using static IP
-    log::info!("waiting for DHCP...");
+    log::debug!("waiting for DHCP...");
     let cfg = wait_for_config(stack, &mut control, &mut watchdog).await;
 
     control.gpio_set(0, true).await;
     let local_addr = cfg.address.address();
-    log::info!("successfully got assigned address {} via dhcp.", local_addr);
+    log::debug!("successfully got assigned address {} via dhcp.", local_addr);
 
     watchdog.feed();
     // go into power save mode
-    // log::info!("setting power management mode: power save");
+    // log::debug!("setting power management mode: power save");
     // control
     //     .set_power_management(cyw43::PowerManagementMode::PowerSave)
     //     .await;
@@ -276,7 +268,7 @@ async fn main(spawner: Spawner) {
     let server_port: u16 = MQTT_SERVER_PORT.parse().unwrap();
     let host_addr = Ipv4Address::from_str(MQTT_SERVER_IP).unwrap();
     let addr = (host_addr, server_port);
-    log::info!("got server address: {:?}", addr);
+    log::debug!("got server address: {:?}", addr);
 
     // get sensor data and send to server
     let mut base_line: f64 = 8.0;
@@ -284,12 +276,12 @@ async fn main(spawner: Spawner) {
     let mut buffer = ryu::Buffer::new();
 
     let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
-    socket.set_timeout(Some(Duration::from_secs(10)));
+    socket.set_keep_alive(Some(Duration::from_secs(2)));
 
     // try to connect to the server
     for _ in 0..50 {
         watchdog.feed();
-        log::info!("connecting...");
+        log::debug!("connecting...");
         blink_led(
             &mut control,
             &mut watchdog,
@@ -304,7 +296,7 @@ async fn main(spawner: Spawner) {
             Timer::after_millis(200).await;
             continue;
         }
-        log::info!("Connected to {:?}", socket.remote_endpoint());
+        log::debug!("Connected to {:?}", socket.remote_endpoint());
         break;
     }
 
@@ -315,13 +307,17 @@ async fn main(spawner: Spawner) {
         return;
     }
 
+    let mut client_id: String<22> = String::new();
+    client_id.push_str("pico-").unwrap();
+    client_id.push_str(mac_addr.as_str()).unwrap();
+
     let mut config = ClientConfig::new(
         rust_mqtt::client::client_config::MqttVersion::MQTTv5,
         CountingRng(20000),
     );
 
+    config.add_client_id(client_id.as_str());
     config.add_max_subscribe_qos(rust_mqtt::packet::v5::publish_packet::QualityOfService::QoS1);
-    config.add_client_id("pico-");
     config.add_username(MQTT_USERNAME);
     config.add_password(MQTT_PASSWORD);
 
@@ -339,7 +335,6 @@ async fn main(spawner: Spawner) {
     );
     client.connect_to_broker().await.unwrap();
 
-    let mut instant: Instant;
     let mut unit: f64;
     let mut msg: &[u8];
 
@@ -355,30 +350,23 @@ async fn main(spawner: Spawner) {
         )
         .await;
 
-        instant = Instant::now();
-
         unit = match ultrasonic.measure().await {
             Ok(unit) => unit.millimeters,
             Err(_) => -1.0,
         };
         watchdog.feed();
 
-        log::info!("distance: {}mm", unit);
-        log::info!("time: {}ms", instant.elapsed().as_millis() as f64);
-
         if unit == -1.0 {
             log::error!("Failed to measure distance");
-            Timer::after_millis(100).await;
             continue;
         }
         if unit > base_line {
             watchdog.feed();
             base_line = unit;
-            Timer::after_millis(100).await;
             continue;
         }
         if unit < base_line - 200.0 {
-            log::info!("base_line has changed from {}mm to {}mm", base_line, unit);
+            log::debug!("base_line has changed from {}mm to {}mm", base_line, unit);
             watchdog.feed();
 
             counter += 1;

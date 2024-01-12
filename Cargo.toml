@@ -8,20 +8,15 @@ resolver = "2"
 cortex-m-rt = "0.7.0"
 defmt = "0.3"
 defmt-rtt = "0.4"
-display-interface = "0.4.1"
-display-interface-spi = "0.4.1"
-embedded-graphics = "0.7.1"
 fixed = "1.23.1"
 fixed-macro = "1.2"
+heapless = "0.8.0"
 log = "0.4"
 panic-probe = "0.3.1"
 panic-reset = "0.1.1"
 panic-semihosting = "0.6.0"
 ryu = "1.0"
-smart-leds = "0.3.0"
-st7789 = "0.6.1"
 static_cell = "2"
-usbd-hid = "0.6.1"
 
 [dependencies.byte-slice-cast]
 version = "1.2.0"
@@ -33,42 +28,40 @@ version = "0.7.6"
 features = ["inline-asm"]
 
 [dependencies.cyw43]
-path = "../embassy/cyw43/"
+version = "0.1.0"
 features = ["defmt"]
 default-features = false
 
 [dependencies.cyw43-pio]
-path = "../embassy/cyw43-pio/"
+version = "0.1.0"
 features = ["overclock"]
 default-features = false
 
 [dependencies.embassy-executor]
-version = "0.4.0"
-path = "../embassy/embassy-executor/"
-features = ["task-arena-size-32768", "arch-cortex-m", "executor-thread", "executor-interrupt", "defmt", "integrated-timers"]
+version = "0.5.0"
+features = ["defmt", "_arch", "task-arena-size-32768", "arch-cortex-m", "executor-thread", "integrated-timers"]
+default-features = false
 
 [dependencies.embassy-futures]
 version = "0.1.0"
 features = []
 
 [dependencies.embassy-net]
-version = "0.3"
-path = "../embassy/embassy-net"
+version = "0.4.0"
 features = ["defmt", "tcp", "udp", "dhcpv4", "medium-ethernet"]
 
 [dependencies.embassy-rp]
 version = "0.1.0"
-path = "../embassy/embassy-rp/"
 features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl"]
 
 [dependencies.embassy-time]
-version = "0.2.0"
-path = "../embassy/embassy-time/"
+version = "0.3.0"
 features = ["defmt", "defmt-timestamp-uptime"]
 
 [dependencies.embassy-usb-logger]
-version = "0.1.0"
-path = "../embassy/embassy-usb-logger/"
+git = "https://github.com/embassy-rs/embassy"
+rev = "b452a6bcf6858893a85882614e2dcde5a3405748"
+optional = true
 features = []
 
 [dependencies.portable-atomic]
@@ -77,9 +70,8 @@ features = ["critical-section"]
 
 [dependencies.rust-mqtt]
 version = "0.2.0"
-path = "../rust-mqtt"
-default-features = false
 features = ["no_std"]
+default-features = false
 
 [profile.release]
 debug = false
@@ -90,3 +82,5 @@ debug = false
 debug = 1
 
 [profile.dev.package]
+
+
