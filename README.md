@@ -1,24 +1,11 @@
-## Raspberry Pi Pico + HC-SR04 sensor + WIFI
+## Raspberry Pi Pico + HC-SR04 sensor + MQTT
 
-A rust program to use the Raspberry Pi Pico with the HC-SR04 sensor.
+A rust program that sends HC-SR04 (Ultrasonic distance sensor) data
+to an MQTT broker.
+
+Use cases include intrusion detection, water level monitoring and others.
 
 ### Get Started
-
-The program uses the [`embassy-rs/embassy`](https://github.com/embassy-rs/embassy)
-packages for the WIFI drivers and GPIO interface. 
-
-```shell
-git clone git@github.com:embassy-rs/embassy.git
-```
-
-Ensure that you clone this repository in the same root directory as embassy,
-otherwise it won't build.
-
-```
--- root
-    -- embassy
-    -- rp-ultrasonic-rs
-```
 
 ```shell
 git clone git@github.com:Benehiko/pico-ultrasonic-rs.git && cd pico-ultrasonic-rs/
@@ -48,9 +35,13 @@ will be baked into the compiled application.
 ```shell
 export RP_WIFI_NETWORK="MySSID"
 export RP_WIFI_PASSWORD="1234"
-export RP_SERVER_IP=192.168.1.100
-export RP_SERVER_PORT=9000
+export RP_MQTT_SERVER_IP=192.168.1.100
+export RP_MQTT_SERVER_PORT=9000
+export RP_MQTT_USERNAME="foo"
+export RP_MQTT_PASSWORD="bar"
 ```
+
+* `MQTT_USERNAME`, `MQTT_PASSWORD` and `MQTT_SERVER_PORT` are optional.
 
 After you have installed all the required dependencies on your OS, run
 
@@ -59,16 +50,62 @@ After you have installed all the required dependencies on your OS, run
 cargo run --release --bin pico-ultrasonic-rs
 ```
 
+You need an MQTT broker. For quick testing on your local network, spin up a [mosquitto](https://mosquitto.org/) instance.
+
+```
+printf '%s\n' 'listener 1883' 'allow_anonymous true' 'max_keepalive 43200' > mosquitto.conf
+mosquitto -c mosquitto.conf
+```
+
+Then listen on the `pico` topic on your machine or another local network device.
+
+```
+mosquitto_sub -p 1883 -t "pico"
+```
+
 ### Wiring up your Pico
 
 You can use a breadboard, but I used female to female jumper
 cables.
+
+![hc-sr04](./hc-sr04.jpg)
+![pico_left](./pico-left.jpg)
+![pico_right](./pico-right.jpg)
 
 Sensor | Pico
 VCC -> VSYS (5V)
 GND -> GND
 Trigger -> GP2
 Echo -> GP3
+
+### Local embassy
+
+The program uses the [`embassy-rs/embassy`](https://github.com/embassy-rs/embassy)
+packages for the WIFI drivers and GPIO interface. 
+
+Sometimes it's necessary to clone embassy to your machine when developing.
+
+```shell
+git clone git@github.com:embassy-rs/embassy.git
+```
+
+Ensure that you clone this repository in the same root directory as embassy,
+otherwise it won't build.
+
+```
+-- root
+    -- embassy
+    -- rp-ultrasonic-rs
+```
+
+Then add the `path` property inside the `Cargo.toml` file with relative paths.
+
+```diff
+[dependencies.embassy-rp]
+version = "0.1.0"
+features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl"]
++ path = "../embassy/embassy-rp/"
+```
 
 ### Developing against your Pico
 
@@ -99,6 +136,7 @@ which in this case is `thumbv6m-none-eabi` and then executes
 port for log output.
 
 Here is an exerpt of the `.cargo/config.toml` file.
+
 ```toml
 [target.thumbv6m-none-eabi]
 runner = "elf2uf2-rs -d -s"
@@ -124,6 +162,7 @@ The software uses the Pico's LEDs to give you some idea of what it's doing.
 8. On each attempt to read the HC-SR04 sensor it will blink
 
 **What about random errors and panics?**
+
 The Pico will restart itself when it panics or does not succeed on an important task.
 For example, it does not connect to the AP after a few attempts or DHCP is unsucessful.
 
@@ -135,9 +174,8 @@ https://www.tomshardware.com/how-to/raspberry-pi-pico-ultrasonic-sensor
 
 https://microcontrollerslab.com/hc-sr04-ultrasonic-sensor-raspberry-pi-pico-micropython-tutorial/
 
----
 
-Credits
+### Credits
 
 The HC-SR04 implementation is pretty much a rewrite of
 https://github.com/marcoradocchia/hc-sr04
