@@ -12,10 +12,12 @@ git clone git@github.com:Benehiko/pico-ultrasonic-rs.git && cd pico-ultrasonic-r
 ```
 
 You need to install [rust](https://www.rust-lang.org/tools/install) and install 
-[elf2uf2-rs](https://docs.rs/crate/elf2uf2-rs/latest).
+[elf2uf2-rs](https://docs.rs/crate/elf2uf2-rs/latest) and [probe-rs](https://probe.rs/)
 
 ```shell
 cargo install elf2uf2-rs --locked
+# be sure to check the linked website for furthre instructions
+cargo install probe-rs --cli
 ```
 
 Since the pico has a different architecture than your development
@@ -63,6 +65,27 @@ Then listen on the `pico` topic on your machine or another local network device.
 mosquitto_sub -p 1883 -t "pico"
 ```
 
+Other topics to listen to: `pico`, `pico-status`.
+
+Topics the pico are subscribed to: `pico-time`.
+
+Send the pico `0` or no payload on `pico-time` for it to immediately start. Otherwise specify in seconds
+how long it should sleep for. Negative numbers aren't allowed.
+
+### Why sleep the pico?
+
+To conserve the pico power source it might be preferrable to set a time (in seconds)
+for which the pico should be idle. In this state it will drop it's network connectivity,
+cleanup some memory and wait. After waiting it will reset and re-request a time in seconds to
+wait.
+
+```shell
+# send no payload
+mosquitto_pub -p 1883 -t "pico-time" -n
+# send a wait of 10 seconds
+mosquitto_pub -p 1883 -t "pico-time" -m 10
+```
+
 ### Wiring up your Pico
 
 You can use a breadboard, but I used female to female jumper
@@ -86,7 +109,8 @@ Echo -> GP3
 The program uses the [`embassy-rs/embassy`](https://github.com/embassy-rs/embassy)
 packages for the WIFI drivers and GPIO interface. 
 
-Sometimes it's necessary to clone embassy to your machine when developing.
+Sometimes it's necessary to clone embassy to your machine when developing, for 
+example when using the `embassy-usb-logger` package.
 
 ```shell
 git clone git@github.com:embassy-rs/embassy.git
@@ -101,15 +125,6 @@ otherwise it won't build.
     -- rp-ultrasonic-rs
 ```
 
-Then add the `path` property inside the `Cargo.toml` file with relative paths.
-
-```diff
-[dependencies.embassy-rp]
-version = "0.1.0"
-features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl"]
-+ path = "../embassy/embassy-rp/"
-```
-
 ### Developing against your Pico
 
 The Pico needs to be mounted as a storage device on your 
@@ -121,10 +136,17 @@ the USB cable into your host machine.
 It will immediately come up as a mounted storage drive.
 
 Next, you will need to run `cargo run` which will flash the Pico
-with the latest build and output the logs from the Pico over serial. 
+with the latest build. 
 
 ```shell
-cargo run --bin pico-ultrasonic-rs
+cargo run --release --bin pico-ultrasonic-rs
+```
+
+To output logs from your Pico you will need to have a local version of `embassy` and
+use the `feature = 'usb-logger'`.
+
+```shell
+cargo run --features usb-logger --release --bin pico-ultrasonic-rs
 ```
 
 Since this is an embedded device, the `std` rust
@@ -148,6 +170,16 @@ runner = "elf2uf2-rs -d -s"
 target = "thumbv6m-none-eabi"
 ```
 
+**Handling panics**
+
+In debug mode (omit `--release` from `cargo run`), the Pico will not reboot
+and can be used with the debugger to get the last panic message.
+
+If you have a debugger connected to your Pico, you can use the `openocd`
+
+See the [Pico documentation](https://datasheets.raspberrypi.com/pico/getting-started-with-pico.pdf)
+under Appendix A for using another Pico as a USB → SWD and UART bridge (Picoprobe).
+
 ### Deploying your Pico
 
 When deploying your Pico into the wild, you might not have the
@@ -168,6 +200,7 @@ The software uses the Pico's LEDs to give you some idea of what it's doing.
 
 The Pico will restart itself when it panics or does not succeed on an important task.
 For example, it does not connect to the AP after a few attempts or DHCP is unsucessful.
+But only with the `cargo run --release` flag!
 
 ### Technical Background links
 
