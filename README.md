@@ -70,9 +70,9 @@ cables.
 
 ![hc-sr04](./hc-sr04.jpg)
 
-![pico_left](./pico-left.jpg)
+![pico_left](./pico_left.jpg)
 
-![pico_right](./pico-right.jpg)
+![pico_right](./pico_right.jpg)
 
 Sensor | Pico
 
