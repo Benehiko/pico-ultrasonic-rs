@@ -4,11 +4,11 @@
 pub mod hc_sr04;
 pub mod hex;
 
+use byteorder::ByteOrder;
 use core::str::FromStr;
 use core::{env, option_env};
 use cyw43_pio::PioSpi;
 use defmt::unwrap;
-use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_net::driver::Driver as NetDriver;
 use embassy_net::tcp::TcpSocket;
@@ -28,11 +28,65 @@ use rust_mqtt::client::client_config::ClientConfig;
 use rust_mqtt::utils::rng_generator::CountingRng;
 use static_cell::StaticCell;
 
-#[cfg(debug_assertions)]
+// global logging
+use defmt_rtt as _;
+
+#[cfg(feature = "panic-semihosting")]
 use panic_semihosting as _;
 
-#[cfg(not(debug_assertions))]
+#[cfg(feature = "panic-halt")]
+use panic_halt as _;
+
+// panic-probe is used together with probe-run
+// when the application panics, it will print the panic message to the console
+#[cfg(feature = "panic-probe")]
+use panic_probe as _;
+
+// panic-reset is used on release
+// builds to reset the microcontroller when a panic occurs
+#[cfg(not(any(feature = "panic-probe", feature = "panic-semihosting")))]
 use panic_reset as _;
+
+use cortex_m_semihosting::debug;
+
+// same panicking *behavior* as `panic-probe` but doesn't print a panic message
+// this prevents the panic message being printed *twice* when `defmt::panic` is invoked
+// #[defmt::panic_handler]
+// fn panic() -> ! {
+//     cortex_m::asm::udf()
+// }
+
+/// Terminates the application and makes a semihosting-capable debug tool exit
+/// with status code 0.
+// pub fn exit() -> ! {
+//     loop {
+//         debug::exit(debug::EXIT_SUCCESS);
+//     }
+// }
+
+#[cortex_m_rt::exception]
+unsafe fn DefaultHandler(_irqn: i16) {
+    defmt::error!("DefaultHandler");
+    loop {
+        debug::exit(debug::EXIT_FAILURE);
+    }
+}
+
+/// Hardfault handler.
+///
+/// Terminates the application and makes a semihosting-capable debug tool exit
+/// with an error. This seems better than the default, which is to spin in a
+/// loop.
+#[cortex_m_rt::exception]
+unsafe fn HardFault(_frame: &cortex_m_rt::ExceptionFrame) -> ! {
+    defmt::error!("HardFault");
+
+    loop {
+        debug::exit(debug::EXIT_FAILURE);
+    }
+}
+
+use log::{debug, error, warn};
 
 type Device = cyw43::NetDriver<'static>;
 
@@ -57,10 +111,10 @@ const MQTT_PASSWORD: &'static str = match option_env!("RP_MQTT_PASSWORD") {
     _ => "",
 };
 
-// #[cfg(feature = "usb-logger")]
-// async fn logger(driver: USBDriver<'static, USB>) {
-//     embassy_usb_logger::run!(1024, log::LevelFilter::Debug, driver);
-// }
+#[cfg(feature = "usb-logger")]
+async fn logger(driver: USBDriver<'static, USB>) {
+    embassy_usb_logger::run!(1024, log::LevelFilter::Trace, driver);
+}
 
 #[cfg(not(feature = "usb-logger"))]
 async fn logger(_driver: USBDriver<'static, USB>) {
@@ -125,7 +179,7 @@ async fn main(spawner: Spawner) {
     let driver = USBDriver::new(usb, Irqs);
     spawner.spawn(logger_task(driver)).unwrap();
 
-    log::debug!("Pico starting up!");
+    debug!("Pico starting up!");
 
     // Setup wifi
     let pwr = Output::new(p.PIN_23, Level::High);
@@ -145,13 +199,13 @@ async fn main(spawner: Spawner) {
     let state = STATE.init(cyw43::State::new());
     let (net_device, mut control, runner) = cyw43::new(state, pwr, spi, fw).await;
 
-    log::debug!("Starting wifi task");
+    debug!("starting wifi task");
     unwrap!(spawner.spawn(wifi_task(runner)));
 
     control.init(clm).await;
 
     // get the device up and running as fast as possible
-    log::debug!("setting power management mode: performance");
+    debug!("setting power management mode: performance");
     control
         .set_power_management(cyw43::PowerManagementMode::Performance)
         .await;
@@ -159,17 +213,17 @@ async fn main(spawner: Spawner) {
     let mac_addr: String<18> = match net_device.hardware_address() {
         embassy_net::driver::HardwareAddress::Ethernet(addr) => mac_addr_to_str(addr),
         _ => {
-            log::error!("failed to get mac address");
+            error!("failed to get mac address");
             panic!("failed to get mac address");
         }
     };
 
-    log::debug!("mac address: {}", mac_addr);
+    debug!("mac address: {}", mac_addr);
 
-    log::debug!("starting watchdog");
+    debug!("starting watchdog");
     // watchdog.start(Duration::from_secs(8));
 
-    log::debug!("blink 2x long blinks");
+    debug!("blink 2x long blinks");
     blink_led(
         &mut control,
         &mut watchdog,
@@ -193,72 +247,75 @@ async fn main(spawner: Spawner) {
         seed,
     ));
 
-    log::debug!("starting net task");
+    debug!("starting net task");
     watchdog.feed();
     unwrap!(spawner.spawn(net_task(&stack)));
 
-    log::debug!("blink 5x short blinks");
-    blink_led(
-        &mut control,
-        &mut watchdog,
-        Duration::from_secs(1),
-        Duration::from_millis(500),
-        5,
-    )
-    .await;
-
-    log::debug!("waiting 2 seconds...");
-    Timer::after_secs(2).await;
-
-    // infinite try to connect to wifi
-    const MAX_RETRIES: usize = 10;
-    let mut current: usize = 0;
-    loop {
-        watchdog.feed();
+    {
+        debug!("blink 5x short blinks");
         blink_led(
             &mut control,
             &mut watchdog,
             Duration::from_secs(1),
-            Duration::from_secs(1),
-            1,
+            Duration::from_millis(500),
+            5,
         )
         .await;
 
-        match control.join_wpa2(WIFI_NETWORK, WIFI_PASSWORD).await {
-            Ok(_) => {
-                log::debug!("connected!");
-                break;
+        debug!("waiting 2 seconds...");
+        Timer::after_secs(2).await;
+        // infinite try to connect to wifi
+        const MAX_RETRIES: usize = 10;
+        let mut current: usize = 0;
+        loop {
+            watchdog.feed();
+            blink_led(
+                &mut control,
+                &mut watchdog,
+                Duration::from_secs(1),
+                Duration::from_secs(1),
+                1,
+            )
+            .await;
+
+            match control.join_wpa2(WIFI_NETWORK, WIFI_PASSWORD).await {
+                Ok(_) => {
+                    debug!("connected!");
+                    break;
+                }
+                Err(e) => {
+                    error!("join failed: {}", e.status);
+                    Timer::after_millis(500).await;
+                }
             }
-            Err(e) => {
-                log::error!("join failed: {}", e.status);
-                Timer::after_millis(500).await;
+            if current >= MAX_RETRIES {
+                panic!("failed to connect to wifi");
             }
+            current += 1;
         }
-        if current >= MAX_RETRIES {
-            panic!("Failed to connect to wifi");
-        }
-        current += 1;
     }
 
     watchdog.feed();
 
-    log::debug!("Wifi connected!");
-    log::debug!("Waiting 2 seconds...");
-    Timer::after_secs(2).await;
+    {
+        debug!("wifi connected!");
+        debug!("waiting 2 seconds...");
+        Timer::after_secs(2).await;
 
-    control.gpio_set(0, false).await;
-    // wait forever to get ip address
-    // Wait for DHCP, not necessary when using static IP
-    log::debug!("waiting for DHCP...");
-    let cfg = wait_for_config(stack, &mut control, &mut watchdog).await;
+        control.gpio_set(0, false).await;
+        // wait forever to get ip address
+        // Wait for DHCP, not necessary when using static IP
+        debug!("waiting for DHCP...");
+        let cfg = wait_for_config(stack, &mut control, &mut watchdog).await;
 
-    control.gpio_set(0, true).await;
-    let local_addr = cfg.address.address();
-    log::debug!("successfully got assigned address {} via dhcp.", local_addr);
+        control.gpio_set(0, true).await;
+        let local_addr = cfg.address.address();
+        debug!("successfully got assigned address {} via dhcp.", local_addr);
+    }
 
     watchdog.feed();
     // go into power save mode
-    log::debug!("setting power management mode: power save");
+    debug!("setting power management mode: power save");
     control
         .set_power_management(cyw43::PowerManagementMode::PowerSave)
         .await;
@@ -268,7 +325,7 @@ async fn main(spawner: Spawner) {
     let server_port: u16 = MQTT_SERVER_PORT.parse().unwrap();
     let host_addr = Ipv4Address::from_str(MQTT_SERVER_IP).unwrap();
     let addr = (host_addr, server_port);
-    log::debug!("got server address: {:?}", addr);
+    debug!("got server address: {:?}", addr);
 
     // get sensor data and send to server
     let mut base_line: f64 = 8.0;
@@ -281,7 +338,7 @@ async fn main(spawner: Spawner) {
     // try to connect to the server
     for _ in 0..50 {
         watchdog.feed();
-        log::debug!("connecting...");
+        debug!("connecting...");
         blink_led(
             &mut control,
             &mut watchdog,
@@ -292,17 +349,17 @@ async fn main(spawner: Spawner) {
         .await;
 
         if let Err(e) = socket.connect(addr).await {
-            log::warn!("connect error: {:?}", e);
+            warn!("connect error: {:?}", e);
             Timer::after_millis(200).await;
             continue;
         }
-        log::debug!("Connected to {:?}", socket.remote_endpoint());
+        debug!("Connected to {:?}", socket.remote_endpoint());
         break;
     }
 
     // we restart the pico if we can't connect to the server
     if socket.remote_endpoint() == None {
-        log::error!("Failed to connect to remote server");
+        error!("failed to connect to remote server");
         watchdog.trigger_reset();
         return;
     }
@@ -317,10 +374,10 @@ async fn main(spawner: Spawner) {
     );
 
     config.add_client_id(client_id.as_str());
-    config.add_max_subscribe_qos(rust_mqtt::packet::v5::publish_packet::QualityOfService::QoS1);
+    config.add_max_subscribe_qos(rust_mqtt::packet::v5::publish_packet::QualityOfService::QoS2);
     config.add_username(MQTT_USERNAME);
     config.add_password(MQTT_PASSWORD);
-    config.add_will("pico", "offline".as_bytes(), true);
+    config.add_will("pico-status", "offline".as_bytes(), true);
     config.keep_alive = 43200;
     config.max_packet_size = 100;
 
@@ -336,6 +393,97 @@ async fn main(spawner: Spawner) {
         config,
     );
     client.connect_to_broker().await.unwrap();
+
+    client.subscribe_to_topic("pico-time").await.unwrap();
+
+    match client
+        .send_message(
+            "pico-status",
+            "online".as_bytes(),
+            rust_mqtt::packet::v5::publish_packet::QualityOfService::QoS1,
+            true,
+        )
+        .await
+    {
+        Ok(_) => debug!("successfully sent message"),
+        Err(e) => error!("failed to send message: {:?}", e),
+    };
+
+    loop {
+        debug!("waiting for wait_until message");
+
+        let (topic, payload): (&str, &[u8]) = match client.receive_message().await {
+            Ok((topic, payload)) => {
+                debug!("got message: {:?} {:?}", topic, payload);
+                (topic, payload)
+            }
+            Err(e) => {
+                error!("failed to receive message: {:?}", e);
+                watchdog.trigger_reset();
+                return;
+            }
+        };
+        debug!("got message: {:?} {:?}", topic, payload);
+
+        if topic.eq("pico-time") {
+            if payload.len() == 0 {
+                debug!("got no payload. assuming no wait time, continuing...");
+                break;
+            }
+            let wait_for_str: &str = match core::str::from_utf8(payload) {
+                Ok(s) => s,
+                Err(err) => {
+                    error!(
+                        "payload is of an invalid type. expected utf-8 string. {:?}",
+                        err
+                    );
+                    continue;
+                }
+            };
+            let wait_for = match wait_for_str.parse::<u64>() {
+                Ok(i) => i,
+                Err(err) => {
+                    debug!("utf-8 string is not a valid number. {:?}", err);
+                    continue;
+                }
+            };
+
+            debug!("wait_for: {}s", wait_for);
+            if wait_for > 0 {
+                match client
+                    .send_message(
+                        "pico-status",
+                        "sleep".as_bytes(),
+                        rust_mqtt::packet::v5::publish_packet::QualityOfService::QoS1,
+                        true,
+                    )
+                    .await
+                {
+                    Ok(_) => (),
+                    Err(_) => error!("failed to send message"),
+                };
+                match client.disconnect().await {
+                    Ok(_) => {
+                        drop(client);
+                        socket.close();
+                        drop(socket);
+                    }
+                    Err(e) => error!("failed to disconnect: {:?}", e),
+                };
+
+                control.leave().await;
+                drop(control);
+                drop(ultrasonic);
+
+                Timer::after_secs(wait_for).await;
+                watchdog.trigger_reset();
+                return;
+            } else {
+                // can continue sending data
+                break;
+            }
+        }
+    }
 
     let mut unit: f64;
     let mut msg: &[u8];
@@ -359,7 +507,7 @@ async fn main(spawner: Spawner) {
         watchdog.feed();
 
         if unit == -1.0 {
-            log::error!("Failed to measure distance");
+            error!("Failed to measure distance");
             continue;
         }
         if unit > base_line {
@@ -368,7 +516,7 @@ async fn main(spawner: Spawner) {
             continue;
         }
         if unit < base_line - 200.0 {
-            log::debug!("base_line has changed from {}mm to {}mm", base_line, unit);
+            debug!("base_line has changed from {}mm to {}mm", base_line, unit);
             watchdog.feed();
 
             counter += 1;
@@ -392,13 +540,11 @@ async fn main(spawner: Spawner) {
                     Err(e) => {
                         failed_count += 1;
                         if failed_count > 10 {
-                            log::error!(
-                                "failed to send message more than 10 retries. Restarting pico"
-                            );
+                            error!("failed to send message more than 10 retries. Restarting pico");
                             watchdog.trigger_reset();
                             break;
                         }
-                        log::error!("failed to send message: {:?}", e)
+                        error!("failed to send message: {:?}", e)
                     }
                     _ => break,
                 };
@@ -425,7 +571,7 @@ async fn wait_for_config(
         Timer::after_millis(500).await;
         control.gpio_set(0, false).await;
         if current >= MAX_RETRIES {
-            log::error!("Failed to get IP address");
+            error!("Failed to get IP address");
             w.trigger_reset();
         }
         current += 1;

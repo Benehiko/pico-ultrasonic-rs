@@ -6,20 +6,27 @@ resolver = "2"
 
 [dependencies]
 cortex-m-rt = "0.7.0"
+cortex-m-semihosting = "0.5.0"
 defmt = "0.3"
 defmt-rtt = "0.4"
 fixed = "1.23.1"
 fixed-macro = "1.2"
 heapless = "0.8.0"
-log = "0.4"
-panic-probe = "0.3.1"
-panic-reset = "0.1.1"
-panic-semihosting = "0.6.0"
 ryu = "1.0"
+log = "0.4"
 static_cell = "2"
+
+[dependencies.panic-reset]
+version = "0.1.1"
+optional = true
 
 [dependencies.byte-slice-cast]
 version = "1.2.0"
+features = []
+default-features = false
+
+[dependencies.byteorder]
+version = "1.3"
 features = []
 default-features = false
 
@@ -29,40 +36,54 @@ features = ["inline-asm"]
 
 [dependencies.cyw43]
 version = "0.1.0"
+path = "../embassy/cyw43/"
 features = ["defmt"]
 default-features = false
 
 [dependencies.cyw43-pio]
 version = "0.1.0"
+path = "../embassy/cyw43-pio/"
 features = ["overclock"]
 default-features = false
 
 [dependencies.embassy-executor]
 version = "0.5.0"
-features = ["defmt", "_arch", "task-arena-size-32768", "arch-cortex-m", "executor-thread", "integrated-timers"]
+path = "../embassy/embassy-executor/"
+features = ["defmt", "_arch", "arch-cortex-m", "task-arena-size-32768", "executor-thread", "integrated-timers"]
 default-features = false
 
 [dependencies.embassy-futures]
 version = "0.1.0"
-features = []
+path = "../embassy/embassy-futures/"
+features = ["defmt"]
 
 [dependencies.embassy-net]
 version = "0.4.0"
+path = "../embassy/embassy-net/"
 features = ["defmt", "tcp", "udp", "dhcpv4", "medium-ethernet"]
 
 [dependencies.embassy-rp]
 version = "0.1.0"
+path = "../embassy/embassy-rp/"
 features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl"]
 
 [dependencies.embassy-time]
 version = "0.3.0"
+path = "../embassy/embassy-time/"
 features = ["defmt", "defmt-timestamp-uptime"]
 
 [dependencies.embassy-usb-logger]
-git = "https://github.com/embassy-rs/embassy"
-rev = "b452a6bcf6858893a85882614e2dcde5a3405748"
-optional = true
+path = "../embassy/embassy-usb-logger/"
 features = []
+optional = true
+
+[dependencies.panic-probe]
+version = "0.3.1"
+features = ["print-defmt"]
+
+[dependencies.panic-semihosting]
+version = "0.6.0"
+features = ["exit"]
 
 [dependencies.portable-atomic]
 version = "1.5"
@@ -73,13 +94,28 @@ version = "0.2.0"
 features = ["no_std"]
 default-features = false
 
+[features]
+default = ["panic-reset"]
+panic-probe = []
+panic-semihosting = []
+usb-logger = ["embassy-usb-logger"]
+
 [profile.release]
-debug = false
+debug = 2
+debug-assertions = false # <-
+incremental = false
+lto = 'fat'
+opt-level = 3            # <-
+overflow-checks = false  # <-
 
 [profile.release.package]
 
 [profile.dev]
-debug = 1
+debug = 2
+debug-assertions = true # <-
+incremental = false
+opt-level = 'z'         # <-
+overflow-checks = true  # <-
 
 [profile.dev.package]
 
