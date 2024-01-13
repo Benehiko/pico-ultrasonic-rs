@@ -69,10 +69,13 @@ You can use a breadboard, but I used female to female jumper
 cables.
 
 ![hc-sr04](./hc-sr04.jpg)
+
 ![pico_left](./pico-left.jpg)
+
 ![pico_right](./pico-right.jpg)
 
 Sensor | Pico
+
 VCC -> VSYS (5V)
 GND -> GND
 Trigger -> GP2
