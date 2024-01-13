@@ -258,10 +258,10 @@ async fn main(spawner: Spawner) {
 
     watchdog.feed();
     // go into power save mode
-    // log::debug!("setting power management mode: power save");
-    // control
-    //     .set_power_management(cyw43::PowerManagementMode::PowerSave)
-    //     .await;
+    log::debug!("setting power management mode: power save");
+    control
+        .set_power_management(cyw43::PowerManagementMode::PowerSave)
+        .await;
 
     let mut rx_buffer = [0; 4096];
     let mut tx_buffer = [0; 4096];
@@ -320,8 +320,10 @@ async fn main(spawner: Spawner) {
     config.add_max_subscribe_qos(rust_mqtt::packet::v5::publish_packet::QualityOfService::QoS1);
     config.add_username(MQTT_USERNAME);
     config.add_password(MQTT_PASSWORD);
-
+    config.add_will("pico", "offline".as_bytes(), true);
+    config.keep_alive = 43200;
     config.max_packet_size = 100;
+
     let mut recv_buffer = [0; 80];
     let mut write_buffer = [0; 80];
 
