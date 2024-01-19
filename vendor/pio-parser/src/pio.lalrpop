@@ -1,0 +1,279 @@
+// https://github.com/raspberrypi/pico-sdk/blob/master/tools/pioasm/parser.yy
+
+use std::str::FromStr;
+use ::pio::{
+  JmpCondition,
+  WaitSource,
+  InSource,
+  OutDestination,
+  MovDestination,
+  MovOperation,
+  MovSource,
+  SetDestination,
+};
+use crate::{
+  Line,
+  Value,
+  ParsedDirective,
+  ParsedInstruction,
+  ParsedOperands,
+};
+
+grammar();
+
+match {
+  r"[\t\f\v ]" => {}, // ignore whitespace
+  r"(\r?\n)?(;|//)[^\n\r]*" => {}, // ignore `;` and `//` comments
+  r"\r?\n" => NEWLINE,
+  r"% c-sdk \{[^%]*%}" => {}, // ignore `% c-sdk { ... }`
+  r"\.lang_opt [^\n\r]*" => LANG_OPT, // lex `.lang_opt` directives
+} else {
+  _
+}
+
+// for parsing a .pio file
+pub(crate) File = NEWLINE* <(DefineDirective NEWLINE+)*> <ProgramWithDirective*>;
+
+ProgramWithDirective = ".program" <Symbol> NEWLINE <Program>;
+
+// for parsing macro input
+pub(crate) Program = NEWLINE* <Line*>;
+
+Line: Line<'input> = {
+  <d:Directive> NEWLINE+ => Line::Directive(d),
+  <p:"public"?> <s:Symbol> ":" NEWLINE+ => Line::Label {
+    public: p.is_some(),
+    name: s,
+  },
+  <i:Instruction> NEWLINE+ => Line::Instruction(i),
+};
+
+Directive: ParsedDirective<'input> = {
+  DefineDirective,
+  ".origin" <v:Value> => ParsedDirective::Origin(v),
+  ".side_set" <v:Value> <o:"opt"?> <p:"pindirs"?> => ParsedDirective::SideSet {
+    value: v,
+    opt: o.is_some(),
+    pindirs: p.is_some(),
+  },
+  ".wrap_target" => ParsedDirective::WrapTarget,
+  ".wrap" => ParsedDirective::Wrap,
+  <l:LANG_OPT> => ParsedDirective::LangOpt(l),
+};
+
+DefineDirective: ParsedDirective<'input> = ".define" <p:"public"?> <s:Symbol> <e:Expression> => ParsedDirective::Define {
+  public: p.is_some(),
+  name: s,
+  value: e,
+};
+
+Instruction: ParsedInstruction<'input> = {
+  <o:BaseInstruction> <s:SideSet> <d:Delay> => ParsedInstruction {
+    operands: o,
+    side_set: Some(s),
+    delay: d,
+  },
+  <o:BaseInstruction> <d:Delay> <s:SideSet> => ParsedInstruction {
+    operands: o,
+    side_set: Some(s),
+    delay: d,
+  },
+  <o:BaseInstruction> <s:SideSet> => ParsedInstruction {
+    operands: o,
+    side_set: Some(s),
+    delay: Value::I32(0),
+  },
+  <o:BaseInstruction> <d:Delay> => ParsedInstruction {
+    operands: o,
+    side_set: None,
+    delay: d,
+  },
+  <o:BaseInstruction> => ParsedInstruction {
+    operands: o,
+    side_set: None,
+    delay: Value::I32(0),
+  },
+};
+
+BaseInstruction: ParsedOperands<'input> = {
+  "nop" => ParsedOperands::MOV {
+    destination: MovDestination::Y,
+    op: MovOperation::None,
+    source: MovSource::Y,
+  },
+  "jmp" <c:JmpCondition?> ","? <e:Expression> => ParsedOperands::JMP {
+    condition: match c {
+      Some(c) => c,
+      None => JmpCondition::Always,
+    },
+    address: e,
+  },
+  "wait" <p:Value> <s:WaitSource> ","? <i:Value> <r:"rel"?> => ParsedOperands::WAIT {
+    polarity: p,
+    source: s,
+    index: i,
+    relative: r.is_some(),
+  },
+  "in" <s:InSource> ","? <b:Value> => ParsedOperands::IN {
+    source: s,
+    bit_count: b,
+  },
+  "out" <d:OutDestination> ","? <b:Value> => ParsedOperands::OUT {
+    destination: d,
+    bit_count: b,
+  },
+  "push" <i:"iffull"?> <b:ShouldBlock?> => ParsedOperands::PUSH {
+    if_full: i.is_some(),
+    block: match b {
+      Some(b) => b,
+      None => true,
+    },
+  },
+  "pull" <i:"ifempty"?> <b:ShouldBlock?> => ParsedOperands::PULL {
+    if_empty: i.is_some(),
+    block: match b {
+      Some(b) => b,
+      None => true,
+    },
+  },
+  "mov" <d:MovDestination> ","? <o:MovOperation?> <s:MovSource> => ParsedOperands::MOV {
+    destination: d,
+    op: match o {
+      Some(o) => o,
+      None => MovOperation::None,
+    },
+    source: s,
+  },
+  "irq" <m:IrqModifier?> <v:Value> <r:"rel"?> => ParsedOperands::IRQ {
+    clear: match m {
+      Some(m) => m.0,
+      None => false,
+    },
+    wait: match m {
+      Some(m) => m.1,
+      None => false,
+    },
+    index: v,
+    relative: r.is_some(),
+  },
+  "set" <d:SetDestination> ","? <v:Value> => ParsedOperands::SET {
+    destination: d,
+    data: v,
+  },
+};
+
+JmpCondition: JmpCondition = {
+  "!" "x" => JmpCondition::XIsZero,
+  "x" "--" => JmpCondition::XDecNonZero,
+  "!" "y" => JmpCondition::YIsZero,
+  "y" "--" => JmpCondition::YDecNonZero,
+  "x" "!=" "y" => JmpCondition::XNotEqualY,
+  "pin" => JmpCondition::PinHigh,
+  "!" "osre" => JmpCondition::OutputShiftRegisterNotEmpty,
+};
+
+WaitSource: WaitSource = {
+  "gpio" => WaitSource::GPIO,
+  "pin" => WaitSource::PIN,
+  "irq" => WaitSource::IRQ,
+};
+
+InSource: InSource = {
+  "pins" => InSource::PINS,
+  "x" => InSource::X,
+  "y" => InSource::Y,
+  "null" => InSource::NULL,
+  "isr" => InSource::ISR,
+  "osr" => InSource::OSR,
+};
+
+OutDestination: OutDestination = {
+  "pins" => OutDestination::PINS,
+  "x" => OutDestination::X,
+  "y" => OutDestination::Y,
+  "null" => OutDestination::NULL,
+  "pindirs" => OutDestination::PINDIRS,
+  "pc" => OutDestination::PC,
+  "isr" => OutDestination::ISR,
+  "exec" => OutDestination::EXEC,
+};
+
+ShouldBlock: bool = {
+  "block" => true,
+  "noblock" => false,
+};
+
+MovDestination: MovDestination = {
+  "pins" => MovDestination::PINS,
+  "x" => MovDestination::X,
+  "y" => MovDestination::Y,
+  "exec" => MovDestination::EXEC,
+  "pc" => MovDestination::PC,
+  "isr" => MovDestination::ISR,
+  "osr" => MovDestination::OSR,
+};
+
+MovOperation: MovOperation = {
+  "!" => MovOperation::Invert,
+  "~" => MovOperation::Invert,
+  "::" => MovOperation::BitReverse,
+};
+
+MovSource: MovSource = {
+  "pins" => MovSource::PINS,
+  "x" => MovSource::X,
+  "y" => MovSource::Y,
+  "null" => MovSource::NULL,
+  "status" => MovSource::STATUS,
+  "isr" => MovSource::ISR,
+  "osr" => MovSource::OSR,
+};
+
+IrqModifier: (bool, bool) = {
+  "set" => (false, false),
+  "nowait" => (false, false),
+  "wait" => (false, true),
+  "clear" => (true, false),
+};
+
+SetDestination: SetDestination = {
+  "pins" => SetDestination::PINS,
+  "x" => SetDestination::X,
+  "y" => SetDestination::Y,
+  "pindirs" => SetDestination::PINDIRS,
+};
+
+SideSet: Value<'input> = "side" <v:Value> => v;
+Delay: Value<'input> = "[" <e:Expression> "]" => e;
+
+Value: Value<'input> = {
+  Int,
+  <s:Symbol> => Value::Symbol(s),
+  "(" <e:Expression> ")" => e,
+};
+
+Expression: Value<'input> = {
+  <a:Expression> "+" <b:ExprNotAdd> => Value::Add(Box::new(a), Box::new(b)),
+  <a:Expression> "-" <b:ExprNotAdd> => Value::Sub(Box::new(a), Box::new(b)),
+  ExprNotAdd,
+};
+
+ExprNotAdd: Value<'input> = {
+  <a:ExprNotAdd> "*" <b:ExprNotMul> => Value::Mul(Box::new(a), Box::new(b)),
+  <a:ExprNotAdd> "/" <b:ExprNotMul> => Value::Div(Box::new(a), Box::new(b)),
+  ExprNotMul,
+};
+
+ExprNotMul: Value<'input> = {
+  "-" <v:Value> => Value::Neg(Box::new(v)),
+  "::" <v:Value> => Value::Rev(Box::new(v)),
+  Value,
+};
+
+Symbol = r"(\p{ID_Start}|_)\p{ID_Continue}*";
+
+Int: Value<'input> = {
+  <s:r"[0-9]+"> => Value::I32(i32::from_str(s).unwrap()),
+  <s:r"0b[01]+"> => Value::I32(i32::from_str_radix(&s[2..], 2).unwrap()),
+  <s:r"0x[0-9a-fA-F]+"> => Value::I32(i32::from_str_radix(&s[2..], 16).unwrap()),
+};

@@ -1,0 +1,28 @@
+# Copyright (c) 2017 The Robigalia Project Developers
+# Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+# http://www.apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT
+# or http://opensource.org/licenses/MIT>, at your option. All files in the
+# project carrying such notice may not be copied, modified, or distributed
+# except according to those terms.
+[package]
+name = "ssmarshal"
+version = "1.0.0"
+authors = ["Corey Richardson <corey@octayn.net>"]
+description = "Stupid simple value-only marshaling using serde"
+documentation = "https://docs.rs/ssmarshal"
+repository = "https://gitlab.com/robigalia/ssmarshal"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+
+[features]
+default = ["std"]
+std = ["serde/std"]
+
+[dependencies]
+serde = { version = "1.0", default-features = false }
+encode_unicode = { version = "0.3", default-features = false }
+
+[dev-dependencies]
+quickcheck = "0.4"
+quickcheck_macros = "0.4"
+serde_derive = "1.0"

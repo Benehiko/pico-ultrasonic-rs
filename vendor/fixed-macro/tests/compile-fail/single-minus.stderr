@@ -1,0 +1,7 @@
+error: unexpected end of input, expected literal
+ --> tests/compile-fail/single-minus.rs:2:5
+  |
+2 |     fixed_macro::fixed!(-);
+  |     ^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the macro `fixed_macro::fixed` (in Nightly builds, run with -Z macro-backtrace for more info)

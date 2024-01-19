@@ -1,0 +1,5 @@
+error: invalid fixed type: invalid number of fractional bits
+ --> $DIR/invalid-type-06.rs:2:31
+  |
+2 |     fixed_macro::fixed!(0123: I16F129);
+  |                               ^^^^^^^

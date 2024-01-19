@@ -1,0 +1,7 @@
+error: expected `:`
+ --> tests/compile-fail/only-literal.rs:2:5
+  |
+2 |     fixed_macro::fixed!(123.45);
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the macro `fixed_macro::fixed` (in Nightly builds, run with -Z macro-backtrace for more info)

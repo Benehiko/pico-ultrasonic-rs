@@ -1,0 +1,5 @@
+error: invalid fixed type: total number of bits must be 8, 16, 32, 64 or 128
+ --> $DIR/invalid-type-07.rs:2:28
+  |
+2 |     fixed_macro::fixed!(0: U10F11);
+  |                            ^^^^^^

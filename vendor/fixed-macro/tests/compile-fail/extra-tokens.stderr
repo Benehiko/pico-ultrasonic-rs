@@ -1,0 +1,5 @@
+error: unexpected token
+ --> $DIR/extra-tokens.rs:2:36
+  |
+2 |     fixed_macro::fixed!(1.23: I4F4 foo);
+  |                                    ^^^

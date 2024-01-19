@@ -1,0 +1,5 @@
+error: invalid fixed value: overflow
+ --> $DIR/overflow-02.rs:2:26
+  |
+2 |     fixed_macro::fixed!(-8.99: I4F4);
+  |                          ^^^^

@@ -1,0 +1,5 @@
+error: negative value for an unsigned fixed type
+ --> $DIR/neg-for-unsigned.rs:2:26
+  |
+2 |     fixed_macro::fixed!(-1.23: U4F4);
+  |                          ^^^^

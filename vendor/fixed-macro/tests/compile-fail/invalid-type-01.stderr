@@ -1,0 +1,5 @@
+error: invalid fixed type: type name must start with `I` or `U`
+ --> $DIR/invalid-type-01.rs:2:31
+  |
+2 |     fixed_macro::fixed!(1.23: XYZ);
+  |                               ^^^

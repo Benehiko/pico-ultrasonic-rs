@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="128"
+   height="128"
+   viewBox="0 0 33.866666 33.866668"
+   version="1.1"
+   id="svg8"
+   inkscape:version="1.2.2 (b0a8486541, 2022-12-01)"
+   sodipodi:docname="fixed-src.svg"
+   inkscape:export-filename="fixed.png"
+   inkscape:export-xdpi="300"
+   inkscape:export-ydpi="300"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <defs
+     id="defs2">
+    <inkscape:path-effect
+       effect="powerclip"
+       id="path-effect268"
+       is_visible="true"
+       lpeversion="1"
+       inverse="true"
+       flatten="false"
+       hide_clip="false"
+       message="Use fill-rule evenodd on &lt;b&gt;fill and stroke&lt;/b&gt; dialog if no flatten result after convert clip to paths." />
+    <inkscape:path-effect
+       effect="powerclip"
+       id="path-effect1252"
+       is_visible="true"
+       lpeversion="1"
+       inverse="true"
+       flatten="false"
+       hide_clip="false"
+       message="Use fill-rule evenodd on &lt;b&gt;fill and stroke&lt;/b&gt; dialog if no flatten result after convert clip to paths." />
+    <clipPath
+       clipPathUnits="userSpaceOnUse"
+       id="clipPath299">
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:16.9333px;line-height:6.10576px;font-family:'Source Sans 3';-inkscape-font-specification:'Source Sans 3 Bold';letter-spacing:0px;word-spacing:0px;fill:#0072b2;stroke:#000000;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+         x="20.717939"
+         y="285.34137"
+         id="text303"><tspan
+           sodipodi:role="line"
+           id="tspan301"
+           x="20.717939"
+           y="285.34137"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:16.9333px;font-family:'Source Sans 3';-inkscape-font-specification:'Source Sans 3 Bold';fill:#0072b2;fill-opacity:1;stroke:none;stroke-width:0.264583px;stroke-opacity:1">28</tspan></text>
+    </clipPath>
+    <clipPath
+       clipPathUnits="userSpaceOnUse"
+       id="clipPath318">
+      <circle
+         style="fill:#0072b2;fill-opacity:1;stroke:none;stroke-width:0.504669;stroke-linecap:butt;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         id="circle320"
+         cx="16.933334"
+         cy="280.06665"
+         r="16.933334" />
+    </clipPath>
+  </defs>
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="5.6568542"
+     inkscape:cx="13.523417"
+     inkscape:cy="72.920387"
+     inkscape:document-units="px"
+     inkscape:current-layer="layer1"
+     showgrid="true"
+     units="px"
+     showguides="true"
+     inkscape:guide-bbox="true"
+     inkscape:window-width="1920"
+     inkscape:window-height="1011"
+     inkscape:window-x="0"
+     inkscape:window-y="32"
+     inkscape:window-maximized="1"
+     inkscape:snap-bbox="true"
+     inkscape:snap-nodes="true"
+     inkscape:snap-others="false"
+     inkscape:bbox-paths="true"
+     inkscape:bbox-nodes="true"
+     inkscape:snap-smooth-nodes="true"
+     inkscape:pagecheckerboard="0"
+     inkscape:showpageshadow="2"
+     inkscape:deskcolor="#d1d1d1">
+    <inkscape:grid
+       type="xygrid"
+       id="grid10" />
+    <sodipodi:guide
+       position="4.2333333,4.4979168"
+       orientation="1,0"
+       id="guide839"
+       inkscape:locked="false" />
+    <sodipodi:guide
+       position="-1.3229166,4.2333334"
+       orientation="0,1"
+       id="guide916"
+       inkscape:locked="false" />
+    <sodipodi:guide
+       position="16.933333,24.077084"
+       orientation="1,0"
+       id="guide4539"
+       inkscape:locked="false" />
+    <sodipodi:guide
+       position="11.90625,16.933334"
+       orientation="0.009999519,-0.99995"
+       id="guide4541"
+       inkscape:locked="false" />
+  </sodipodi:namedview>
+  <metadata
+     id="metadata5">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title />
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(0,-263.13331)">
+    <circle
+       style="display:inline;fill:#f7f1a1;fill-opacity:1;stroke:none;stroke-width:0.504668;stroke-linecap:butt;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="path4492"
+       cx="16.933334"
+       cy="280.06665"
+       r="16.933334" />
+    <path
+       id="rect1588-3"
+       style="fill:#0072b2;stroke-width:0.529167"
+       d="m 15.345829,283.50622 h 3.175 c 0,0 0,0.79376 0.52917,1.8521 h -4.23333 c 0.52916,-1.05834 0.52916,-1.8521 0.52916,-1.8521 z"
+       sodipodi:nodetypes="ccccc" />
+    <circle
+       style="fill:#0072b2;fill-opacity:1;stroke:none;stroke-width:0.504668;stroke-linecap:butt;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="path4492-3"
+       cx="16.933334"
+       cy="280.06665"
+       r="16.933334"
+       clip-path="url(#clipPath299)" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:33.8667px;line-height:12.2115px;font-family:'Source Sans 3';-inkscape-font-specification:'Source Sans 3 Bold';letter-spacing:0px;word-spacing:0px;fill:#0072b2;stroke:#000000;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       x="11.853333"
+       y="283.75388"
+       id="text1010-7"><tspan
+         sodipodi:role="line"
+         id="tspan1008-9"
+         x="11.853333"
+         y="283.75388"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:33.8667px;font-family:'Source Sans 3';-inkscape-font-specification:'Source Sans 3 Bold';fill:#0072b2;fill-opacity:1;stroke:none;stroke-width:0.264583px;stroke-opacity:1">.</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:16.9333px;line-height:6.10576px;font-family:'Source Sans 3';-inkscape-font-specification:'Source Sans 3, Bold';letter-spacing:0px;word-spacing:0px;fill:#0072b2;stroke:#000000;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal"
+       x="-4.6820688"
+       y="285.34137"
+       id="text1010"
+       clip-path="url(#clipPath318)"><tspan
+         sodipodi:role="line"
+         id="tspan1008"
+         x="-4.6820688"
+         y="285.34137"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:16.9333335px;font-family:'Source Sans 3';-inkscape-font-specification:'Source Sans 3, Bold';fill:#0072b2;fill-opacity:1;stroke:none;stroke-width:0.264583px;stroke-opacity:1;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal">06</tspan></text>
+  </g>
+</svg>

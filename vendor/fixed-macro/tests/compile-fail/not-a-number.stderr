@@ -1,0 +1,5 @@
+error: invalid fixed value: expected int or float
+ --> $DIR/not-a-number.rs:2:25
+  |
+2 |     fixed_macro::fixed!("ok": I0F128);
+  |                         ^^^^

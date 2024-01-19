@@ -1,0 +1,5 @@
+error: invalid fixed type: invalid number of integer bits
+ --> $DIR/invalid-type-02.rs:2:31
+  |
+2 |     fixed_macro::fixed!(1.23: UF);
+  |                               ^^

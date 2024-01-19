@@ -1,15 +1,20 @@
 #![no_std]
 #![no_main]
+#![feature(error_in_core)]
+#![feature(async_closure)]
 
 pub mod hc_sr04;
 pub mod hex;
+pub mod mqtt;
 
-use byteorder::ByteOrder;
+use core::borrow::BorrowMut;
+use core::cell::RefCell;
 use core::str::FromStr;
-use core::{env, option_env};
+use core::{env, error, fmt, option_env};
 use cyw43_pio::PioSpi;
 use defmt::unwrap;
 use embassy_executor::Spawner;
+use embassy_futures::select;
 use embassy_net::driver::Driver as NetDriver;
 use embassy_net::tcp::TcpSocket;
 use embassy_net::{Config, Ipv4Address, Stack, StackResources};
@@ -23,9 +28,7 @@ use embassy_time::{Duration, Timer};
 use hc_sr04::HCSR04;
 use heapless::String;
 use hex::mac_addr_to_str;
-use rust_mqtt::client::client::MqttClient;
-use rust_mqtt::client::client_config::ClientConfig;
-use rust_mqtt::utils::rng_generator::CountingRng;
+use mqtt::{BrokerMessage, PICO_STATUS_TOPIC, PICO_TOPIC};
 use static_cell::StaticCell;
 
 // global logging
@@ -44,7 +47,11 @@ use panic_probe as _;
 
 // panic-reset is used on release
 // builds to reset the microcontroller when a panic occurs
-#[cfg(not(any(feature = "panic-probe", feature = "panic-semihosting")))]
+#[cfg(not(any(
+    feature = "panic-probe",
+    feature = "panic_halt",
+    feature = "panic-semihosting"
+)))]
 use panic_reset as _;
 
 use cortex_m_semihosting::debug;
@@ -138,18 +145,18 @@ async fn wifi_task(
 }
 
 async fn blink_led(
-    control: &mut cyw43::Control<'static>,
-    w: &mut Watchdog,
+    control: &RefCell<cyw43::Control<'static>>,
+    w: &RefCell<Watchdog>,
     led_on_duration: Duration,
     between_cycles_duration: Duration,
     max_cycles: u8,
 ) {
     let mut current_cycle: u8 = 0;
     loop {
-        w.feed();
-        control.gpio_set(0, true).await;
+        w.borrow_mut().feed();
+        control.borrow_mut().gpio_set(0, true).await;
         Timer::after(led_on_duration).await;
-        control.gpio_set(0, false).await;
+        control.borrow_mut().gpio_set(0, false).await;
         Timer::after(between_cycles_duration).await;
         current_cycle += 1;
         if current_cycle >= max_cycles {
@@ -169,7 +176,7 @@ async fn main(spawner: Spawner) {
     let fw = include_bytes!("../../embassy/cyw43-firmware/43439A0.bin");
     let clm = include_bytes!("../../embassy/cyw43-firmware/43439A0_clm.bin");
 
-    let mut watchdog = Watchdog::new(p.WATCHDOG);
+    let watchdog: RefCell<Watchdog> = RefCell::new(Watchdog::new(p.WATCHDOG));
 
     // Initialize driver.
     let mut ultrasonic = HCSR04::new(p.PIN_2, p.PIN_3).unwrap();
@@ -197,16 +204,19 @@ async fn main(spawner: Spawner) {
 
     static STATE: StaticCell<cyw43::State> = StaticCell::new();
     let state = STATE.init(cyw43::State::new());
-    let (net_device, mut control, runner) = cyw43::new(state, pwr, spi, fw).await;
+    let (net_device, ctrl, runner) = cyw43::new(state, pwr, spi, fw).await;
+
+    let control: RefCell<cyw43::Control<'static>> = RefCell::new(ctrl);
 
     debug!("starting wifi task");
     unwrap!(spawner.spawn(wifi_task(runner)));
 
-    control.init(clm).await;
+    control.borrow_mut().init(clm).await;
 
     // get the device up and running as fast as possible
     debug!("setting power management mode: performance");
     control
+        .borrow_mut()
         .set_power_management(cyw43::PowerManagementMode::Performance)
         .await;
 
@@ -225,8 +235,8 @@ async fn main(spawner: Spawner) {
 
     debug!("blink 2x long blinks");
     blink_led(
-        &mut control,
-        &mut watchdog,
+        &control,
+        &watchdog,
         Duration::from_secs(2),
         Duration::from_secs(1),
         2,
@@ -248,14 +258,14 @@ async fn main(spawner: Spawner) {
     ));
 
     debug!("starting net task");
-    watchdog.feed();
+    watchdog.borrow_mut().feed();
     unwrap!(spawner.spawn(net_task(&stack)));
 
     {
         debug!("blink 5x short blinks");
         blink_led(
-            &mut control,
-            &mut watchdog,
+            &control,
+            &watchdog,
             Duration::from_secs(1),
             Duration::from_millis(500),
             5,
@@ -268,17 +278,21 @@ async fn main(spawner: Spawner) {
         const MAX_RETRIES: usize = 10;
         let mut current: usize = 0;
         loop {
-            watchdog.feed();
+            watchdog.borrow_mut().feed();
             blink_led(
-                &mut control,
-                &mut watchdog,
+                &control,
+                &watchdog,
                 Duration::from_secs(1),
                 Duration::from_secs(1),
                 1,
             )
             .await;
 
-            match control.join_wpa2(WIFI_NETWORK, WIFI_PASSWORD).await {
+            match control
+                .borrow_mut()
+                .join_wpa2(WIFI_NETWORK, WIFI_PASSWORD)
+                .await
+            {
                 Ok(_) => {
                     debug!("connected!");
                     break;
@@ -295,110 +309,98 @@ async fn main(spawner: Spawner) {
         }
     }
 
-    watchdog.feed();
+    watchdog.borrow_mut().feed();
 
     {
         debug!("wifi connected!");
         debug!("waiting 2 seconds...");
         Timer::after_secs(2).await;
 
-        control.gpio_set(0, false).await;
+        control.borrow_mut().gpio_set(0, false).await;
         // wait forever to get ip address
         // Wait for DHCP, not necessary when using static IP
         debug!("waiting for DHCP...");
-        let cfg = wait_for_config(stack, &mut control, &mut watchdog).await;
+        let cfg = wait_for_config(stack, &control, &watchdog).await;
 
-        control.gpio_set(0, true).await;
+        control.borrow_mut().gpio_set(0, true).await;
         let local_addr = cfg.address.address();
         debug!("successfully got assigned address {} via dhcp.", local_addr);
     }
 
-    watchdog.feed();
+    watchdog.borrow_mut().feed();
     // go into power save mode
     debug!("setting power management mode: power save");
     control
+        .borrow_mut()
         .set_power_management(cyw43::PowerManagementMode::PowerSave)
         .await;
 
-    let mut rx_buffer = [0; 4096];
-    let mut tx_buffer = [0; 4096];
     let server_port: u16 = MQTT_SERVER_PORT.parse().unwrap();
     let host_addr = Ipv4Address::from_str(MQTT_SERVER_IP).unwrap();
     let addr = (host_addr, server_port);
     debug!("got server address: {:?}", addr);
+
+    let socket = match create_socket(addr, stack, &control, &watchdog).await {
+        Ok(socket) => socket,
+        Err(err) => {
+            debug!("could not connect to socket: {:?}", err);
+            watchdog.borrow_mut().trigger_reset();
+            return;
+        }
+    };
 
     // get sensor data and send to server
     let mut base_line: f64 = 8.0;
     let mut counter: i8 = 0;
     let mut buffer = ryu::Buffer::new();
 
-    let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
-    socket.set_keep_alive(Some(Duration::from_secs(2)));
-
-    // try to connect to the server
-    for _ in 0..50 {
-        watchdog.feed();
-        debug!("connecting...");
-        blink_led(
-            &mut control,
-            &mut watchdog,
-            Duration::from_millis(200),
-            Duration::from_millis(200),
-            1,
-        )
-        .await;
-
-        if let Err(e) = socket.connect(addr).await {
-            warn!("connect error: {:?}", e);
-            Timer::after_millis(200).await;
-            continue;
-        }
-        debug!("Connected to {:?}", socket.remote_endpoint());
-        break;
-    }
-
-    // we restart the pico if we can't connect to the server
-    if socket.remote_endpoint() == None {
-        error!("failed to connect to remote server");
-        watchdog.trigger_reset();
-        return;
-    }
-
     let mut client_id: String<22> = String::new();
-    client_id.push_str("pico-").unwrap();
-    client_id.push_str(mac_addr.as_str()).unwrap();
+    client_id.borrow_mut().push_str("pico-").unwrap();
+    client_id.borrow_mut().push_str(mac_addr.as_str()).unwrap();
+    let client_id = client_id.as_str();
 
-    let mut config = ClientConfig::new(
-        rust_mqtt::client::client_config::MqttVersion::MQTTv5,
-        CountingRng(20000),
-    );
+    let cid = client_id.clone();
 
-    config.add_client_id(client_id.as_str());
-    config.add_max_subscribe_qos(rust_mqtt::packet::v5::publish_packet::QualityOfService::QoS2);
-    config.add_username(MQTT_USERNAME);
-    config.add_password(MQTT_PASSWORD);
-    config.add_will("pico-status", "offline".as_bytes(), true);
-    config.keep_alive = 43200;
-    config.max_packet_size = 100;
+    // start listening to messages in the background
+    let bg = async {
+        let socket = match create_socket(addr, stack, &control, &watchdog).await {
+            Ok(socket) => socket,
+            Err(err) => {
+                debug!("could not connect to socket: {:?}", err);
+                watchdog.borrow_mut().trigger_reset();
+                return;
+            }
+        };
 
-    let mut recv_buffer = [0; 80];
-    let mut write_buffer = [0; 80];
+        let mut background_mqtt = mqtt::MQTT::new(&socket, cid, MQTT_USERNAME, MQTT_PASSWORD);
+        loop {
+            watchdog.borrow_mut().feed();
+            let broker_message = match background_mqtt.receive_broker_message().await {
+                Ok(b) => b,
+                Err(e) => {
+                    error!("failed to receive message: {:?}", e);
+                    continue;
+                }
+            };
 
-    let mut client = MqttClient::<&mut TcpSocket, 5, _>::new(
-        &mut socket,
-        &mut write_buffer,
-        80,
-        &mut recv_buffer,
-        80,
-        config,
-    );
-    client.connect_to_broker().await.unwrap();
+            match broker_message {
+                BrokerMessage::Reset(_) => {
+                    debug!("got reset message");
+                    watchdog.borrow_mut().trigger_reset();
+                }
+                _ => {
+                    continue;
+                }
+            }
+        }
+    };
 
-    client.subscribe_to_topic("pico-time").await.unwrap();
+    let mut mqtt = mqtt::MQTT::new(&socket, client_id, MQTT_USERNAME, MQTT_PASSWORD);
 
-    match client
+    match mqtt
+        .client
         .send_message(
-            "pico-status",
+            PICO_STATUS_TOPIC,
             "online".as_bytes(),
             rust_mqtt::packet::v5::publish_packet::QualityOfService::QoS1,
             true,
@@ -412,168 +414,228 @@ async fn main(spawner: Spawner) {
     loop {
         debug!("waiting for wait_until message");
 
-        let (topic, payload): (&str, &[u8]) = match client.receive_message().await {
-            Ok((topic, payload)) => {
-                debug!("got message: {:?} {:?}", topic, payload);
-                (topic, payload)
-            }
+        let broker_message = match mqtt.receive_broker_message().await {
+            Ok(b) => b,
             Err(e) => {
                 error!("failed to receive message: {:?}", e);
-                watchdog.trigger_reset();
+                watchdog.borrow_mut().trigger_reset();
                 return;
             }
         };
-        debug!("got message: {:?} {:?}", topic, payload);
 
-        if topic.eq("pico-time") {
-            if payload.len() == 0 {
-                debug!("got no payload. assuming no wait time, continuing...");
-                break;
+        let wait_for = match broker_message {
+            BrokerMessage::WaitFor(wait_for) => {
+                debug!("got wait_until message: {}", wait_for);
+                wait_for
             }
-            let wait_for_str: &str = match core::str::from_utf8(payload) {
-                Ok(s) => s,
-                Err(err) => {
-                    error!(
-                        "payload is of an invalid type. expected utf-8 string. {:?}",
-                        err
-                    );
-                    continue;
-                }
-            };
-            let wait_for = match wait_for_str.parse::<u64>() {
-                Ok(i) => i,
-                Err(err) => {
-                    debug!("utf-8 string is not a valid number. {:?}", err);
-                    continue;
-                }
-            };
-
-            debug!("wait_for: {}s", wait_for);
-            if wait_for > 0 {
-                match client
-                    .send_message(
-                        "pico-status",
-                        "sleep".as_bytes(),
-                        rust_mqtt::packet::v5::publish_packet::QualityOfService::QoS1,
-                        true,
-                    )
-                    .await
-                {
-                    Ok(_) => (),
-                    Err(_) => error!("failed to send message"),
-                };
-                match client.disconnect().await {
-                    Ok(_) => {
-                        drop(client);
-                        socket.close();
-                        drop(socket);
-                    }
-                    Err(e) => error!("failed to disconnect: {:?}", e),
-                };
-
-                control.leave().await;
-                drop(control);
-                drop(ultrasonic);
-
-                Timer::after_secs(wait_for).await;
-                watchdog.trigger_reset();
-                return;
-            } else {
-                // can continue sending data
-                break;
+            _ => {
+                debug!("expected wait_until message");
+                continue;
             }
+        };
+
+        if wait_for > 0 {
+            match mqtt
+                .client
+                .send_message(
+                    PICO_STATUS_TOPIC,
+                    "sleep".as_bytes(),
+                    rust_mqtt::packet::v5::publish_packet::QualityOfService::QoS1,
+                    true,
+                )
+                .await
+            {
+                Ok(_) => (),
+                Err(_) => error!("failed to send message"),
+            };
+            match mqtt.client.disconnect().await {
+                Ok(_) => {
+                    drop(mqtt);
+                    socket.borrow_mut().close();
+                    drop(socket);
+                }
+                Err(e) => error!("failed to disconnect: {:?}", e),
+            };
+
+            control.borrow_mut().leave().await;
+            drop(ultrasonic);
+
+            Timer::after_secs(wait_for).await;
+            watchdog.borrow_mut().trigger_reset();
+            return;
+        } else {
+            // can continue sending data
+            break;
         }
     }
 
-    let mut unit: f64;
-    let mut msg: &[u8];
+    let process_sensor = async {
+        let mut unit: f64;
+        let mut msg: &[u8];
 
+        loop {
+            watchdog.borrow_mut().feed();
+
+            blink_led(
+                &control,
+                &watchdog,
+                Duration::from_millis(100),
+                Duration::from_millis(100),
+                1,
+            )
+            .await;
+
+            unit = match ultrasonic.measure().await {
+                Ok(unit) => unit.millimeters,
+                Err(_) => -1.0,
+            };
+            watchdog.borrow_mut().feed();
+
+            if unit == -1.0 {
+                error!("Failed to measure distance");
+                continue;
+            }
+            if unit > base_line {
+                watchdog.borrow_mut().feed();
+                base_line = unit;
+                continue;
+            }
+            if unit < base_line - 200.0 {
+                debug!("base_line has changed from {}mm to {}mm", base_line, unit);
+                watchdog.borrow_mut().feed();
+
+                counter += 1;
+                if counter > 10 {
+                    base_line = unit;
+                    counter = 0;
+                }
+                msg = buffer.format(unit).as_bytes();
+
+                let mut failed_count = 0;
+                loop {
+                    match mqtt
+                        .client
+                        .send_message(
+                            PICO_TOPIC,
+                            msg,
+                            rust_mqtt::packet::v5::publish_packet::QualityOfService::QoS1,
+                            true,
+                        )
+                        .await
+                    {
+                        Err(e) => {
+                            failed_count += 1;
+                            if failed_count > 10 {
+                                error!(
+                                    "failed to send message more than 10 retries. Restarting pico"
+                                );
+                                watchdog.borrow_mut().trigger_reset();
+                                break;
+                            }
+                            error!("failed to send message: {:?}", e)
+                        }
+                        _ => break,
+                    };
+                }
+
+                Timer::after_millis(100).await;
+            }
+        }
+    };
+
+    select::select(bg, process_sensor).await;
+}
+
+async fn wait_for_config(
+    stack: &'static Stack<Device>,
+    control: &RefCell<cyw43::Control<'static>>,
+    w: &RefCell<Watchdog>,
+) -> embassy_net::StaticConfigV4 {
+    const MAX_RETRIES: usize = 20;
+    let mut current: usize = 0;
     loop {
-        watchdog.feed();
+        w.borrow_mut().feed();
+        control.borrow_mut().gpio_set(0, true).await;
+        if let Some(config) = stack.config_v4() {
+            break config.clone();
+        }
+        Timer::after_millis(500).await;
+        control.borrow_mut().gpio_set(0, false).await;
+        if current >= MAX_RETRIES {
+            error!("Failed to get IP address");
+            w.borrow_mut().trigger_reset();
+        }
+        current += 1;
+    }
+}
+
+#[derive(Debug)]
+enum SocketErrors {
+    FailedToConnect,
+}
+
+impl fmt::Display for SocketErrors {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            SocketErrors::FailedToConnect => {
+                write!(f, "failed to connect to socket")
+            }
+        }
+    }
+}
+
+impl error::Error for SocketErrors {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match *self {
+            SocketErrors::FailedToConnect => None,
+        }
+    }
+}
+
+type SocketResult<'a> = Result<RefCell<TcpSocket<'a>>, SocketErrors>;
+
+async fn create_socket<'a>(
+    addr: (Ipv4Address, u16),
+    stack: &'a Stack<Device>,
+    control: &RefCell<cyw43::Control<'static>>,
+    watchdog: &RefCell<Watchdog>,
+) -> SocketResult<'a> {
+    static RX_BUFFER: StaticCell<[u8; 4096]> = StaticCell::new();
+
+    static TX_BUFFER: StaticCell<[u8; 4096]> = StaticCell::new();
+
+    let mut socket =
+        TcpSocket::<'a>::new(stack, RX_BUFFER.init([0; 4096]), TX_BUFFER.init([0; 4096]));
+
+    socket.set_keep_alive(Some(Duration::from_secs(2)));
+    // try to connect to the server
+    for _ in 0..50 {
+        debug!("connecting...");
+
+        watchdog.borrow_mut().feed();
 
         blink_led(
-            &mut control,
-            &mut watchdog,
+            control,
+            watchdog,
             Duration::from_millis(100),
             Duration::from_millis(100),
             1,
         )
         .await;
 
-        unit = match ultrasonic.measure().await {
-            Ok(unit) => unit.millimeters,
-            Err(_) => -1.0,
-        };
-        watchdog.feed();
-
-        if unit == -1.0 {
-            error!("Failed to measure distance");
-            continue;
-        }
-        if unit > base_line {
-            watchdog.feed();
-            base_line = unit;
-            continue;
-        }
-        if unit < base_line - 200.0 {
-            debug!("base_line has changed from {}mm to {}mm", base_line, unit);
-            watchdog.feed();
-
-            counter += 1;
-            if counter > 10 {
-                base_line = unit;
-                counter = 0;
-            }
-            msg = buffer.format(unit).as_bytes();
-
-            let mut failed_count = 0;
-            loop {
-                match client
-                    .send_message(
-                        "pico",
-                        msg,
-                        rust_mqtt::packet::v5::publish_packet::QualityOfService::QoS1,
-                        true,
-                    )
-                    .await
-                {
-                    Err(e) => {
-                        failed_count += 1;
-                        if failed_count > 10 {
-                            error!("failed to send message more than 10 retries. Restarting pico");
-                            watchdog.trigger_reset();
-                            break;
-                        }
-                        error!("failed to send message: {:?}", e)
-                    }
-                    _ => break,
-                };
-            }
-
+        if let Err(e) = socket.connect(addr).await {
+            warn!("connect error: {:?}", e);
             Timer::after_millis(100).await;
+            continue;
         }
+        debug!("Connected to {:?}", socket.remote_endpoint());
+        break;
     }
-}
 
-async fn wait_for_config(
-    stack: &'static Stack<Device>,
-    control: &mut cyw43::Control<'static>,
-    w: &mut Watchdog,
-) -> embassy_net::StaticConfigV4 {
-    const MAX_RETRIES: usize = 20;
-    let mut current: usize = 0;
-    loop {
-        w.feed();
-        control.gpio_set(0, true).await;
-        if let Some(config) = stack.config_v4() {
-            break config.clone();
-        }
-        Timer::after_millis(500).await;
-        control.gpio_set(0, false).await;
-        if current >= MAX_RETRIES {
-            error!("Failed to get IP address");
-            w.trigger_reset();
-        }
-        current += 1;
+    // we restart the pico if we can't connect to the server
+    if socket.remote_endpoint() == None {
+        error!("failed to connect to remote server");
+        return Err(SocketErrors::FailedToConnect);
     }
+    Ok(RefCell::new(socket))
 }

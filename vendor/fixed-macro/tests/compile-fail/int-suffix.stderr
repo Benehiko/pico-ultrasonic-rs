@@ -1,0 +1,5 @@
+error: invalid fixed value: unexpected suffix
+ --> $DIR/int-suffix.rs:2:25
+  |
+2 |     fixed_macro::fixed!(123usize: I4F4);
+  |                         ^^^^^^^^

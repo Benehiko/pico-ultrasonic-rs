@@ -1,0 +1,5 @@
+error: invalid fixed value: exponent out of range
+ --> $DIR/exp-too-big.rs:2:25
+  |
+2 |     fixed_macro::fixed!(123e+128: I4F4);
+  |                         ^^^^^^^^

@@ -1,0 +1,5 @@
+error: invalid fixed value: expected int or float
+ --> $DIR/types-not-a-number.rs:2:31
+  |
+2 |     fixed_macro::types::I4F4!("a");
+  |                               ^^^
