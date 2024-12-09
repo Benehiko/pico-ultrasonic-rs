@@ -8,15 +8,15 @@ Use cases include intrusion detection, water level monitoring and others.
 ### Get Started
 
 ```shell
-git clone git@github.com:Benehiko/pico-ultrasonic-rs.git && cd pico-ultrasonic-rs/
+git clone git@github.com:Benehiko/pico-ultrasonic-rs.git && cd pico-ultrasonic-rs
 ```
 
-You need to install [rust](https://www.rust-lang.org/tools/install) and install 
+You need to install [rust](https://www.rust-lang.org/tools/install),
 [elf2uf2-rs](https://docs.rs/crate/elf2uf2-rs/latest) and [probe-rs](https://probe.rs/)
 
 ```shell
 cargo install elf2uf2-rs --locked
-# be sure to check the linked website for furthre instructions
+# be sure to check the linked website for further instructions
 cargo install probe-rs --cli
 ```
 
@@ -91,25 +91,23 @@ mosquitto_pub -p 1883 -t "pico-time" -m 10
 You can use a breadboard, but I used female to female jumper
 cables.
 
-![hc-sr04](./hc-sr04.jpg)
+| Sensor   | Pico      |
+|----------|-----------|
+| VCC      | VSYS (5V) |
+| GND      | GND       |
+| Trigger  | GP2       |
+| Echo     | GP3       |
 
-![pico_left](./pico_left.jpg)
-
-![pico_right](./pico_right.jpg)
-
-Sensor | Pico
-
-VCC -> VSYS (5V)
-GND -> GND
-Trigger -> GP2
-Echo -> GP3
+<img src="./assets/hc-sr04.jpg" style="max-height: 300px;">
+<img src="./assets/pico_left.jpg" style="max-height: 300px;">
+<img src="./assets/pico_right.jpg" style="max-height: 300px;">
 
 ### Local embassy
 
 The program uses the [`embassy-rs/embassy`](https://github.com/embassy-rs/embassy)
-packages for the WIFI drivers and GPIO interface. 
+abstraction layers for the Wi-Fi and GPIO interfaces on the Pico.
 
-Sometimes it's necessary to clone embassy to your machine when developing, for 
+Sometimes it's necessary to clone embassy to your machine when developing, for
 example when using the `embassy-usb-logger` package.
 
 ```shell
@@ -127,7 +125,7 @@ otherwise it won't build.
 
 ### Developing against your Pico
 
-The Pico needs to be mounted as a storage device on your 
+The Pico needs to be mounted as a storage device on your
 development machine.
 
 Press and hold the `BOOTSEL` button on the pico while plugging
@@ -153,7 +151,7 @@ Since this is an embedded device, the `std` rust
 library cannot be used. Always try use `core` instead or find another
 alternative.
 
-**Explaining what happened**
+#### Explaining what happened
 
 `cargo` builds the application based on the `.cargo/config.toml` target,
 which in this case is `thumbv6m-none-eabi` and then executes
@@ -170,7 +168,7 @@ runner = "elf2uf2-rs -d -s"
 target = "thumbv6m-none-eabi"
 ```
 
-**Handling panics**
+#### Handling panics
 
 In debug mode (omit `--release` from `cargo run`), the Pico will not reboot
 and can be used with the debugger to get the last panic message.
@@ -187,7 +185,7 @@ relevant equipment to diagnose your Pico, such as your laptop.
 
 The software uses the Pico's LEDs to give you some idea of what it's doing.
 
-1. Pico boots initializing the wifi drivers to access the onboard LED.
+1. Pico boots initializing the Wi-Fi drivers to access the onboard LED.
 2. Pico signals 2x1second blinks to show it is alive.
 3. Next it signals 5x1 second blinks to show it will connect to the specified AP.
 4. It will wait 2 seconds.
@@ -196,7 +194,7 @@ The software uses the Pico's LEDs to give you some idea of what it's doing.
 7. Solid green means it has an IP and will start reading the HC-SR04 sensor
 8. On each attempt to read the HC-SR04 sensor it will blink
 
-**What about random errors and panics?**
+#### What about random errors and panics?
 
 The Pico will restart itself when it panics or does not succeed on an important task.
 For example, it does not connect to the AP after a few attempts or DHCP is unsucessful.
@@ -204,18 +202,10 @@ But only with the `cargo run --release` flag!
 
 ### Technical Background links
 
-https://www.handsontec.com/dataspecs/HC-SR04-Ultrasonic.pdf
-
-https://www.tomshardware.com/how-to/raspberry-pi-pico-ultrasonic-sensor
-
-https://microcontrollerslab.com/hc-sr04-ultrasonic-sensor-raspberry-pi-pico-micropython-tutorial/
-
+* <https://www.handsontec.com/dataspecs/HC-SR04-Ultrasonic.pdf>
+* <https://www.tomshardware.com/how-to/raspberry-pi-pico-ultrasonic-sensor>
+* <https://microcontrollerslab.com/hc-sr04-ultrasonic-sensor-raspberry-pi-pico-micropython-tutorial/>
 
 ### Credits
 
-The HC-SR04 implementation is pretty much a rewrite of
-https://github.com/marcoradocchia/hc-sr04
-with the difference being the underlying library
-that does the GPIO communications. 
-
-
+The HC-SR04 implementation is pretty much a rewrite of <https://github.com/marcoradocchia/hc-sr04> with the difference being the underlying library that does the GPIO communications.
